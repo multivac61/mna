@@ -13,6 +13,19 @@ def test_bassman_tonestack_resistors_only():
     bassman_tonestack_2 = [
         VoltageSource(1, 0, 1),
         Resistor(1, 2, 1),
+        Resistor(1, 3, 1),
+        Resistor(2, 3, 1),
+        Resistor(3, 4, 1),
+        Resistor(2, 4, 1),
+        Resistor(4, 0, 1),
+    ]
+
+    assert num_nodes(bassman_tonestack_2) == 5
+    assert np.allclose(solve_mna(bassman_tonestack_2), np.array([1, 3/4, 3/4, 1/2, -1/2]))
+
+    bassman_tonestack_2 = [
+        VoltageSource(1, 0, 1),
+        Resistor(1, 2, 1),
         Resistor(1, 3, 2),
         Resistor(2, 3, 3),
         Resistor(3, 4, 4),
@@ -92,3 +105,21 @@ def test_current_source_resistor_galore():
     ]), np.array([i2, i1, i3, i5, i4]))
 
     assert np.allclose(solve_mna(hd2_4), np.array(hd2_4_direct).astype(float).T)
+
+def test_dc_blocker_capacitor():
+    assert False
+
+def test_simple_inductor_circuit():
+    assert False
+
+def test_vcvs():
+    assert False
+
+def test_ccvs():
+    assert False
+
+def test_vccs():
+    assert False
+
+def test_op_amp():
+    assert False
