@@ -7,6 +7,9 @@ def sym_solve_mna(circuit):
     return map(sym.Matrix, solve_mna(circuit, zeros=lambda x: sym.Matrix(np.zeros(x)), block=sym.BlockMatrix,
                                      return_populated_system=True))
 
+def test_num_unknown_currents():
+    assert num_unknown_currents([VoltageSource(1, 0, 1)]) == 1
+    assert num_unknown_currents([VoltageSource(1, 0, 1), VoltageSource(1, 0, 1)]) == 2
 
 def test_num_nodes():
     assert num_nodes([VoltageSource(1, 0, 1)]) == 2
@@ -86,17 +89,17 @@ def test_simple_circuit_2():
 
 
 def test_circuit_resistor_voltage_source():
+    g1, g2, g3, g4, v1, v2 = 1 / 4, 1 / 12, 1 / 2, 1 / 3, 2, 3
     hd2_2 = [
-        VoltageSource(1, 0, 2),
-        VoltageSource(3, 0, 3),
-        Resistor(1, 2, 4),
-        Resistor(2, 3, 12),
-        Resistor(2, 4, 2),
-        Resistor(4, 0, 3)
+        VoltageSource(1, 0, v1),
+        VoltageSource(3, 0, v2),
+        Resistor(1, 2, 1 / g1),
+        Resistor(2, 3, 1 / g2),
+        Resistor(2, 4, 1 / g3),
+        Resistor(4, 0, 1 / g4)
     ]
     assert num_nodes(hd2_2) == 5
 
-    g1, g2, g3, g4, v1, v2 = 1 / 4, 1 / 12, 1 / 2, 1 / 3, 2, 3
     hd2_2_direct = np.linalg.solve(np.array([
         [g1, -g1, 0, 0, 1, 0],
         [-g1, g1 + g2 + g3, -g2, -g3, 0, 0],
@@ -139,7 +142,7 @@ def test_current_source_resistor_galore():
         [0, 0, -g8, -g9, g8 + g9 + g10],
     ]), np.array([i2, i1, i3, i5, i4]))
 
-    assert np.allclose(solve_mna(hd2_4), np.array(hd2_4_direct).astype(float).T)
+    assert np.allclose(solve_mna(hd2_4), hd2_4_direct)
 
 
 def test_op_adder_circuit():
@@ -225,9 +228,9 @@ def test_cccs():
 
     g1, g2, g3, g4 = 1 / r1, 1 / r2, 1 / r3, 1 / r4
     A_hand = sym.Matrix([
-        [g1, -g1, 0, 0, -mu+1],
-        [-g1, g1+g3, -g3, 0, 0],
-        [0, -g3, g2+g3+g4, -g2, 0],
+        [g1, -g1, 0, 0, -mu + 1],
+        [-g1, g1 + g3, -g3, 0, 0],
+        [0, -g3, g2 + g3 + g4, -g2, 0],
         [0, 0, -g2, g2, -1],
         [1, 0, 0, -1, 0],
     ])
@@ -235,7 +238,7 @@ def test_cccs():
 
     A, E = sym_solve_mna(hd5_2)
 
-    # assert A == A_hand
+    assert A == A_hand
     assert E == E_hand
 
 
@@ -266,9 +269,8 @@ def test_non_planar_circuit():
 
 
 def test_vccs():
-    # hd4_1
     r1, r2, r3, r4, mu = sym.symbols('r1 r2 r3 r4 mu')
-    sym_hd4_1 = [
+    hd4_1 = [
         Resistor(1, 0, r1 + r2),
         Resistor(1, 0, r3),
         Resistor(1, 2, r4),
@@ -276,8 +278,8 @@ def test_vccs():
         CurrentSource(2, 0, 1)
     ]
 
-    assert num_nodes(sym_hd4_1) == 3
-    assert num_unknown_currents(sym_hd4_1) == 0
+    assert num_nodes(hd4_1) == 3
+    assert num_unknown_currents(hd4_1) == 0
 
     A_hand = sym.Matrix([
         [1 / (r1 + r2) + 1 / r3 + 1 / r4, -1 / r4],
@@ -285,25 +287,14 @@ def test_vccs():
     ])
     E_hand = sym.Matrix([0, 1])
 
-    A, E = sym_solve_mna(sym_hd4_1)
+    A, E = sym_solve_mna(hd4_1)
 
-    assert A_hand == A
-    assert E_hand == E
-
-    r1, r2, r3, r4, mu = 30, 20, 4, 5, 2
-    hd4_1_matrix = np.linalg.solve(np.array([
-        [1 / (r1 + r2) + 1 / r3 + 1 / r4, -1 / r4],
-        [-1 / r4 - mu, 1 / r4]
-    ]), np.array([0, 1]))
-
-    solved = A.LUsolve(E).subs({'r1': r1, 'r2': r2, 'r3': r3, 'r4': r4, 'mu': mu})
-    assert np.allclose(np.array(solved).astype(float).T, hd4_1_matrix)
+    assert A_hand == A and E_hand == E
 
 
 def test_op_amp():
-    # hd3_1
     v_in = 42
-    circuit = [
+    hd3_1 = [
         VoltageSource(1, 0, v_in),
         OperationalAmplifier(1, 2, 3, 0),
         Resistor(2, 0, 10e3),
@@ -315,27 +306,28 @@ def test_op_amp():
         Resistor(5, 6, 10e3),
     ]
 
-    assert num_nodes(circuit) == 7
-    assert np.allclose(solve_mna(circuit), v_in * np.array([1.0, 1.0, 2.0, 1.6, 1.6, 16 / 5, 0.0, - 3.0e-04, -1.6e-04]))
+    assert num_nodes(hd3_1) == 7
+    assert np.allclose(solve_mna(hd3_1), v_in * np.array([1.0, 1.0, 2.0, 1.6, 1.6, 16 / 5, 0.0, - 3.0e-04, -1.6e-04]))
 
 
 def test_op_amp2():
-    # hd3_2
-    v_in = 5
-    circuit = [
-        VoltageSource(1, 0, v_in),
-        Resistor(1, 2, 1),
-        Resistor(2, 4, 1),
-        Resistor(2, 3, 2),
-        Resistor(3, 4, 3),
-        Resistor(4, 5, 2),
-        Resistor(5, 0, 1),
+    r1, r2, r3, r4, r5, r6, vin = sym.symbols('r1, r2, r3, r4, r5, r6, vin')
+    hd3_2 = [
+        VoltageSource(1, 0, vin),
+        Resistor(1, 2, r1),
+        Resistor(2, 4, r2),
+        Resistor(2, 3, r3),
+        Resistor(3, 4, r4),
+        Resistor(4, 5, r5),
+        Resistor(5, 0, r6),
         OperationalAmplifier(5, 3, 4, 0),
     ]
+    assert num_nodes(hd3_2) == 6
+    assert num_unknown_currents(hd3_2) == 2
 
-    g1, g2, g3, g4, g5, g6 = 1 / 1, 1 / 1, 1 / 2, 1 / 3, 1 / 2, 1 / 1
+    g1, g2, g3, g4, g5, g6 = 1 / r1, 1 / r2, 1 / r3, 1 / r4, 1 / r5, 1 / r6
 
-    hd3_2 = np.linalg.solve(np.array([
+    A_hand = sym.Matrix([
         [g1, -g1, 0, 0, 0, 1, 0],
         [-g1, g1 + g2 + g3, -g3, -g2, 0, 0, 0],
         [0, -g3, g3 + g4, -g4, 0, 0, 0],
@@ -343,7 +335,9 @@ def test_op_amp2():
         [0, 0, 0, -g5, g5 + g6, 0, 0],
         [1, 0, 0, 0, 0, 0, 0],
         [0, 0, -1, 0, 1, 0, 0],
-    ]), np.array([0, 0, 0, 0, 0, v_in, 0]))
+    ])
+    E_hand = sym.Matrix([0, 0, 0, 0, 0, vin, 0])
 
-    assert num_nodes(circuit) == 6
-    assert np.allclose(solve_mna(circuit), np.array(hd3_2).astype(float).T)
+    A, E = sym_solve_mna(hd3_2)
+
+    assert A_hand == A and E_hand == E
