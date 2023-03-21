@@ -3,43 +3,45 @@ from mna import *
 import sympy as sym
 
 
-def sym_solve_mna(circuit):
+def sym_solve_mna(circuit, populated=True):
     return map(sym.Matrix, solve_mna(circuit, zeros=lambda x: sym.Matrix(np.zeros(x)), block=sym.BlockMatrix,
-                                     return_populated_system=True))
+                                     return_populated_system=populated))
+
 
 def test_num_unknown_currents():
-    assert num_unknown_currents([VoltageSource(1, 0, 1)]) == 1
-    assert num_unknown_currents([VoltageSource(1, 0, 1), VoltageSource(1, 0, 1)]) == 2
+    assert total_unknown_currents([VoltageSource((1, 0), 1)]) == 1
+    assert total_unknown_currents([VoltageSource((1, 0), 1), VoltageSource((1, 0), 1)]) == 2
+
 
 def test_num_nodes():
-    assert num_nodes([VoltageSource(1, 0, 1)]) == 2
-    assert num_nodes([Resistor(1, 0), Resistor(10, 0)]) == 3
-    assert num_nodes([Resistor(i, 0) for i in range(50)]) == 50
-    assert num_nodes([VoltageSource(i, 0) for i in range(50) if i % 2 == 0]) == 25
+    assert num_nodes([VoltageSource((1, 0), 1)]) == 2
+    assert num_nodes([Resistor((1, 0)), Resistor((10, 0))]) == 3
+    assert num_nodes([Resistor((i, 0)) for i in range(50)]) == 50
+    assert num_nodes([VoltageSource((i, 0)) for i in range(50) if i % 2 == 0]) == 25
 
 
 def test_bassman_tonestack_resistors_only():
     bassman_tonestack_2 = [
-        VoltageSource(1, 0, 1),
-        Resistor(1, 2, 1),
-        Resistor(1, 3, 1),
-        Resistor(2, 3, 1),
-        Resistor(3, 4, 1),
-        Resistor(2, 4, 1),
-        Resistor(4, 0, 1),
+        VoltageSource((1, 0), 1),
+        Resistor((1, 2), 1),
+        Resistor((1, 3), 1),
+        Resistor((2, 3), 1),
+        Resistor((3, 4), 1),
+        Resistor((2, 4), 1),
+        Resistor((4, 0), 1),
     ]
 
     assert num_nodes(bassman_tonestack_2) == 5
     assert np.allclose(solve_mna(bassman_tonestack_2), np.array([1, 3 / 4, 3 / 4, 1 / 2, -1 / 2]))
 
     bassman_tonestack_2 = [
-        VoltageSource(1, 0, 1),
-        Resistor(1, 2, 1),
-        Resistor(1, 3, 2),
-        Resistor(2, 3, 3),
-        Resistor(3, 4, 4),
-        Resistor(2, 4, 5),
-        Resistor(4, 0, 6),
+        VoltageSource((1, 0), 1),
+        Resistor((1, 2), 1),
+        Resistor((1, 3), 2),
+        Resistor((2, 3), 3),
+        Resistor((3, 4), 4),
+        Resistor((2, 4), 5),
+        Resistor((4, 0), 6),
     ]
     assert num_nodes(bassman_tonestack_2) == 5
     assert np.allclose(solve_mna(bassman_tonestack_2), np.array([1, 44 / 47, 85 / 94, 63 / 94, -21 / 188]))
@@ -47,13 +49,13 @@ def test_bassman_tonestack_resistors_only():
 
 def test_simple_circuit():
     components = [
-        VoltageSource(1, 0, 1),
-        Resistor(1, 2, 1),
-        Resistor(1, 3, 1),
-        Resistor(2, 3, 1),
-        Resistor(3, 4, 1),
-        Resistor(2, 4, 1),
-        Resistor(4, 0, 1),
+        VoltageSource((1, 0), 1),
+        Resistor((1, 2), 1),
+        Resistor((1, 3), 1),
+        Resistor((2, 3), 1),
+        Resistor((3, 4), 1),
+        Resistor((2, 4), 1),
+        Resistor((4, 0), 1),
     ]
     assert num_nodes(components) == 5
     assert np.allclose(solve_mna(components), np.array([1, 3 / 4, 3 / 4, 1 / 2, -1 / 2]))
@@ -62,16 +64,16 @@ def test_simple_circuit():
 def test_simple_circuit_2():
     r1, r2, r3, r4, r5, v1 = sym.symbols('r1, r2, r3, r4, r5, v1')
     hd5_1 = [
-        VoltageSource(1, 0, v1),
-        Resistor(1, 2, r1),
-        Resistor(1, 3, r2),
-        Resistor(2, 3, r3),
-        Resistor(2, 0, r4),
-        Resistor(3, 0, r5),
+        VoltageSource((1, 0), v1),
+        Resistor((1, 2), r1),
+        Resistor((1, 3), r2),
+        Resistor((2, 3), r3),
+        Resistor((2, 0), r4),
+        Resistor((3, 0), r5),
     ]
 
     assert num_nodes(hd5_1) == 4
-    assert num_unknown_currents(hd5_1) == 1
+    assert total_unknown_currents(hd5_1) == 1
 
     g1, g2, g3, g4, g5 = 1 / r1, 1 / r2, 1 / r3, 1 / r4, 1 / r5
     A_hand = sym.Matrix([
@@ -91,12 +93,12 @@ def test_simple_circuit_2():
 def test_circuit_resistor_voltage_source():
     g1, g2, g3, g4, v1, v2 = 1 / 4, 1 / 12, 1 / 2, 1 / 3, 2, 3
     hd2_2 = [
-        VoltageSource(1, 0, v1),
-        VoltageSource(3, 0, v2),
-        Resistor(1, 2, 1 / g1),
-        Resistor(2, 3, 1 / g2),
-        Resistor(2, 4, 1 / g3),
-        Resistor(4, 0, 1 / g4)
+        VoltageSource((1, 0), v1),
+        VoltageSource((3, 0), v2),
+        Resistor((1, 2), 1 / g1),
+        Resistor((2, 3), 1 / g2),
+        Resistor((2, 4), 1 / g3),
+        Resistor((4, 0), 1 / g4)
     ]
     assert num_nodes(hd2_2) == 5
 
@@ -113,21 +115,21 @@ def test_circuit_resistor_voltage_source():
 
 def test_current_source_resistor_galore():
     hd2_4 = [
-        CurrentSource(2, 0, 3),
-        CurrentSource(1, 0, -1),
-        CurrentSource(3, 0, -2),
-        CurrentSource(5, 0, 4),
-        CurrentSource(4, 0, 2),
-        Resistor(1, 0, 1),
-        Resistor(1, 3, 1 / 2),
-        Resistor(1, 2, 1),
-        Resistor(2, 3, 1 / 3),
-        Resistor(2, 4, 1 / 2),
-        Resistor(3, 0, 1),
-        Resistor(3, 4, 1),
-        Resistor(3, 5, 1 / 3),
-        Resistor(4, 5, 1 / 2),
-        Resistor(5, 0, 1 / 2),
+        CurrentSource((2, 0), 3),
+        CurrentSource((1, 0), -1),
+        CurrentSource((3, 0), -2),
+        CurrentSource((5, 0), 4),
+        CurrentSource((4, 0), 2),
+        Resistor((1, 0), 1),
+        Resistor((1, 3), 1 / 2),
+        Resistor((1, 2), 1),
+        Resistor((2, 3), 1 / 3),
+        Resistor((2, 4), 1 / 2),
+        Resistor((3, 0), 1),
+        Resistor((3, 4), 1),
+        Resistor((3, 5), 1 / 3),
+        Resistor((4, 5), 1 / 2),
+        Resistor((5, 0), 1 / 2),
     ]
     assert num_nodes(hd2_4) == 6
 
@@ -147,11 +149,11 @@ def test_current_source_resistor_galore():
 
 def test_op_adder_circuit():
     hd3_3 = [
-        ResistiveVoltageSource(1, 0, 1, 1),
-        ResistiveVoltageSource(2, 0, 1, 1),
-        ResistiveVoltageSource(2, 0, 1, 1),
-        Resistor(1, 3, 1),
-        OperationalAmplifier(2, 1, 3, 0)
+        ResistiveVoltageSource((1, 0), 1, 1),
+        ResistiveVoltageSource((2, 0), 1, 1),
+        ResistiveVoltageSource((2, 0), 1, 1),
+        Resistor((1, 3), 1),
+        IdealOperationalAmplifier((2, 1, 3, 0))
     ]
     g1 = g2 = g3 = g4 = v1 = v2 = v3 = 1
     hd3_3_direct = np.linalg.solve(np.array([
@@ -170,13 +172,13 @@ def test_op_adder_circuit():
 
 def test_resistive_voltage_source():
     volt_source = [
-        VoltageSource(1, 0, 1),
-        Resistor(1, 2, 1),
-        Resistor(2, 3, 1),
+        VoltageSource((1, 0), 1),
+        Resistor((1, 2), 1),
+        Resistor((2, 3), 1),
     ]
     resistive_volt_source = [
-        ResistiveVoltageSource(1, 0, 1, 1),
-        Resistor(1, 2, 1),
+        ResistiveVoltageSource((1, 0), v=1, r=1),
+        Resistor((1, 2), 1),
     ]
     assert np.allclose(solve_mna(volt_source)[1:], solve_mna(resistive_volt_source))
 
@@ -184,15 +186,15 @@ def test_resistive_voltage_source():
 def test_vcvs():
     r1, r2, r3, mu, i1 = sym.symbols('r1, r2, r3, mu, i1')
     hd3_4 = [
-        CurrentSource(1, 0, i1),
-        Resistor(1, 0, r1),
-        Resistor(1, 2, r2),
-        Resistor(2, 0, r3),
-        VoltageControlledVoltageSource(1, 0, 2, 1, mu)
+        CurrentSource((1, 0), i1),
+        Resistor((1, 0), r1),
+        Resistor((1, 2), r2),
+        Resistor((2, 0), r3),
+        VoltageControlledVoltageSource((1, 0, 2, 1), mu)
     ]
 
     assert num_nodes(hd3_4) == 3
-    assert num_unknown_currents(hd3_4) == 1
+    assert total_unknown_currents(hd3_4) == 1
 
     A_hand = sym.Matrix([
         [1 / r1 + 1 / r2, -1 / r2, -1],
@@ -211,20 +213,21 @@ def test_ccvs():
     pass
 
 
-def test_cccs():
+def sometime_once_weve_added_cccs():
+    pass
     r1, r2, r3, r4, mu, i1, v1 = sym.symbols('r1, r2, r3, r4, mu, i1, v1')
     hd5_2 = [
-        CurrentControlledCurrentSource(1, 4, 1, 0, mu),
-        VoltageSource(1, 4, v1),
-        CurrentSource(2, 0, i1),
-        Resistor(1, 2, r1),
-        Resistor(4, 3, r2),
-        Resistor(2, 3, r3),
-        Resistor(3, 0, r4)
+        CurrentControlledCurrentSource((1, 4, 1, 0), mu),
+        VoltageSource((1, 4), v1),
+        CurrentSource((2, 0), i1),
+        Resistor((1, 2), r1),
+        Resistor((4, 3), r2),
+        Resistor((2, 3), r3),
+        Resistor((3, 0), r4)
     ]
 
     assert num_nodes(hd5_2) == 5
-    assert num_unknown_currents(hd5_2) == 2
+    assert total_unknown_currents(hd5_2) == 2
 
     g1, g2, g3, g4 = 1 / r1, 1 / r2, 1 / r3, 1 / r4
     A_hand = sym.Matrix([
@@ -245,15 +248,15 @@ def test_cccs():
 def test_non_planar_circuit():
     r1, r2, r3, r4, v1, i1 = sym.symbols('r1, r2, r3, r4, v1, i1')
     circuit = [
-        Resistor(1, 0, r1),
-        ResistiveVoltageSource(1, 0, volt=v1, resistance=r3),
-        Resistor(1, 2, r2),
-        Resistor(2, 0, r4),
-        CurrentSource(0, 2, i1)
+        Resistor((1, 0), r1),
+        ResistiveVoltageSource((1, 0), v=v1, r=r3),
+        Resistor((1, 2), r2),
+        Resistor((2, 0), r4),
+        CurrentSource((0, 2), i1)
     ]
 
     assert num_nodes(circuit) == 3
-    assert num_unknown_currents(circuit) == 1
+    assert total_unknown_currents(circuit) == 1
 
     A_hand = sym.Matrix([
         [1 / r1 + 1 / r2, -1 / r2, 1],
@@ -271,15 +274,15 @@ def test_non_planar_circuit():
 def test_vccs():
     r1, r2, r3, r4, mu = sym.symbols('r1 r2 r3 r4 mu')
     hd4_1 = [
-        Resistor(1, 0, r1 + r2),
-        Resistor(1, 0, r3),
-        Resistor(1, 2, r4),
-        VoltageControlledCurrentSource(1, 0, 2, 0, mu),
-        CurrentSource(2, 0, 1)
+        Resistor((1, 0), r1 + r2),
+        Resistor((1, 0), r3),
+        Resistor((1, 2), r4),
+        VoltageControlledCurrentSource((1, 0, 2, 0), mu),
+        CurrentSource((2, 0), 1)
     ]
 
     assert num_nodes(hd4_1) == 3
-    assert num_unknown_currents(hd4_1) == 0
+    assert total_unknown_currents(hd4_1) == 0
 
     A_hand = sym.Matrix([
         [1 / (r1 + r2) + 1 / r3 + 1 / r4, -1 / r4],
@@ -295,15 +298,15 @@ def test_vccs():
 def test_op_amp():
     v_in = 42
     hd3_1 = [
-        VoltageSource(1, 0, v_in),
-        OperationalAmplifier(1, 2, 3, 0),
-        Resistor(2, 0, 10e3),
-        Resistor(2, 3, 10e3),
-        Resistor(3, 4, 2e3),
-        Resistor(4, 0, 8e3),
-        Resistor(5, 0, 10e3),
-        OperationalAmplifier(4, 5, 6, 0),
-        Resistor(5, 6, 10e3),
+        VoltageSource((1, 0), v_in),
+        IdealOperationalAmplifier((1, 2, 3, 0)),
+        Resistor((2, 0), 10e3),
+        Resistor((2, 3), 10e3),
+        Resistor((3, 4), 2e3),
+        Resistor((4, 0), 8e3),
+        Resistor((5, 0), 10e3),
+        IdealOperationalAmplifier((4, 5, 6, 0)),
+        Resistor((5, 6), 10e3),
     ]
 
     assert num_nodes(hd3_1) == 7
@@ -313,17 +316,17 @@ def test_op_amp():
 def test_op_amp2():
     r1, r2, r3, r4, r5, r6, vin = sym.symbols('r1, r2, r3, r4, r5, r6, vin')
     hd3_2 = [
-        VoltageSource(1, 0, vin),
-        Resistor(1, 2, r1),
-        Resistor(2, 4, r2),
-        Resistor(2, 3, r3),
-        Resistor(3, 4, r4),
-        Resistor(4, 5, r5),
-        Resistor(5, 0, r6),
-        OperationalAmplifier(5, 3, 4, 0),
+        VoltageSource((1, 0), vin),
+        Resistor((1, 2), r1),
+        Resistor((2, 4), r2),
+        Resistor((2, 3), r3),
+        Resistor((3, 4), r4),
+        Resistor((4, 5), r5),
+        Resistor((5, 0), r6),
+        IdealOperationalAmplifier((5, 3, 4, 0)),
     ]
     assert num_nodes(hd3_2) == 6
-    assert num_unknown_currents(hd3_2) == 2
+    assert total_unknown_currents(hd3_2) == 2
 
     g1, g2, g3, g4, g5, g6 = 1 / r1, 1 / r2, 1 / r3, 1 / r4, 1 / r5, 1 / r6
 
@@ -341,3 +344,22 @@ def test_op_amp2():
     A, E = sym_solve_mna(hd3_2)
 
     assert A_hand == A and E_hand == E
+
+
+def test_noninverting_op_amp():
+    # https://github.com/mph-/lcapy/blob/master/doc/examples/notebooks/opamp-noninverting-amplifier1.ipynb
+    vin, r1, r2, rl = 0.1, 100, 900, 1000
+    circuit = [
+        VoltageSource((1, 0), vin),
+        Resistor((2, 0), r1),
+        Resistor((2, 3), r2),
+        Resistor((3, 0), rl),
+        IdealOperationalAmplifier((1, 2, 3, 0))
+    ]
+
+    X = solve_mna(circuit)
+
+    assert num_nodes(circuit) == 4
+    assert total_unknown_currents(circuit) == 2
+    assert X[0] == vin and X[1] == 1 / 10 and X[2] == 1
+

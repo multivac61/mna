@@ -10,256 +10,203 @@ import numpy as np
 # n0 (-) --/   \-- (-) n2
 
 class Component:
-    def __init__(self, n1, n0, value=0, name=None):
-        self.n1, self.n0 = n1, n0
-        self.name = name
-        self.value = value
-
-    def nodes(self):
-        return self.n1, self.n0
-
-    def num_unknown_currents(self):
-        return 0
+    def __init__(self, nodes, name=None):
+        self.nodes, self.name = nodes, name
+        self.num_unknown_currents = 0
 
 
 class ResistiveVoltageSource(Component):
-    def __init__(self, n1, n0, volt=0, resistance=0, name=None):
-        super().__init__(n1, n0, volt, name)
-        self.volt, self.resistance = volt, resistance
+    def __init__(self, nodes, v=0, r=0, name=None):
+        super().__init__(nodes, name)
+        self.v, self.r = v, r
+        self.num_unknown_currents = 1
 
-    def num_unknown_currents(self):
-        return 1
-
-    def stamp(self, G, B, C, D, E, unknown_currents):
-        idx = num_unknown_currents(unknown_currents)
-        unknown_currents.append(self)
-
-        B[self.n1, idx] += 1
-        B[self.n0, idx] -= 1
-        C[idx, self.n1] += 1
-        C[idx, self.n0] -= 1
-        D[idx, idx] -= self.resistance
-
-        E[G.shape[0] + idx] = self.volt
+    def stamp(self, G, B, C, D, E, idx):
+        n1, n0 = self.nodes
+        B[n1, idx] += 1
+        B[n0, idx] -= 1
+        C[idx, n1] += 1
+        C[idx, n0] -= 1
+        D[idx, idx] -= self.r
+        E[G.shape[0] + idx] = self.v
 
 
 class VoltageSource(Component):
-    def __init__(self, n1, n0, value=0, name=None):
-        super().__init__(n1, n0, value, name)
+    def __init__(self, nodes, v=0, name=None):
+        super().__init__(nodes, name)
+        self.v = v
+        self.num_unknown_currents = 1
 
-    def num_unknown_currents(self):
-        return 1
+    def stamp(self, G, B, C, _D, E, idx):
+        n1, n0 = self.nodes
+        B[n1, idx] += 1
+        B[n0, idx] -= 1
+        C[idx, n1] += 1
+        C[idx, n0] -= 1
 
-    def stamp(self, G, B, C, _D, E, unknown_currents):
-        idx = num_unknown_currents(unknown_currents)
-        unknown_currents.append(self)
-
-        B[self.n1, idx] += 1
-        B[self.n0, idx] -= 1
-        C[idx, self.n1] += 1
-        C[idx, self.n0] -= 1
-
-        E[G.shape[0] + idx] = self.value
+        E[G.shape[0] + idx] = self.v
 
 
 class CurrentSource(Component):
-    def __init__(self, n1, n0, value=0, name=None):
-        super().__init__(n1, n0, value, name)
+    def __init__(self, nodes, i=0, name=None):
+        super().__init__(nodes, name)
+        self.i = i
 
-    def stamp(self, _G, _B, _C, _D, E, _unknown_currents):
-        E[self.n1] += self.value
-        E[self.n0] -= self.value
+    def stamp(self, _G, _B, _C, _D, E, _idx):
+        n1, n0 = self.nodes
+        E[n1] += self.i
+        E[n0] -= self.i
 
 
 class Resistor(Component):
-    def __init__(self, n1, n0, value=0, name=None):
-        super().__init__(n1, n0, value, name)
+    def __init__(self, nodes, r=0, name=None):
+        super().__init__(nodes, name)
+        self.r = r
 
-    def stamp(self, G, _B, _C, _D, _E, _unknown_currents):
-        G[self.n1, self.n1] += 1 / self.value
-        G[self.n0, self.n0] += 1 / self.value
-        G[self.n1, self.n0] -= 1 / self.value
-        G[self.n0, self.n1] -= 1 / self.value
+    def stamp(self, G, _B, _C, _D, _E, _idx):
+        (n1, n0), g = self.nodes, 1 / self.r
+        G[n1, n1] += g
+        G[n0, n0] += g
+        G[n1, n0] -= g
+        G[n0, n1] -= g
 
 
 class Capacitor(Component):
-    def __init__(self, n1, n0, value=0, name=None):
-        super().__init__(n1, n0, value, name)
+    def __init__(self, nodes, c=0, name=None):
+        super().__init__(nodes, name)
+        self.z = 1 / c
 
-    def stamp(self, G, _B, _C, _D, _E, _unknown_currents):
-        G[self.n1, self.n1] += 1 / self.value
-        G[self.n0, self.n0] += 1 / self.value
-        G[self.n1, self.n0] -= 1 / self.value
-        G[self.n0, self.n1] -= 1 / self.value
+    def stamp(self, G, _B, _C, _D, _E, _idx):
+        G[n1, n1] += self.z
+        G[n0, n0] += self.z
+        G[n1, n0] -= self.z
+        G[n0, n1] -= self.z
 
 
 class Inductor(Component):
-    def __init__(self, n1, n0, value=0, name=None):
-        super().__init__(n1, n0, value, name)
+    def __init__(self, nodes, l=0, name=None):
+        super().__init__(nodes, name)
+        self.l = l
 
-    def stamp(self, G, _B, _C, _D, _E, _unknown_currents):
-        G[self.n1, self.n1] += self.value
-        G[self.n0, self.n0] += self.value
-        G[self.n1, self.n0] -= self.value
-        G[self.n0, self.n1] -= self.value
+    def stamp(self, G, _B, _C, _D, _E, _idx):
+        G[n1, n1] += self.l
+        G[n0, n0] += self.l
+        G[n1, n0] -= self.l
+        G[n0, n1] -= self.l
 
 
 class OpenCircuit(Component):
-    def __init__(self, n1, n0, value=0, name=None):
-        super().__init__(n1, n0, value, name)
+    def __init__(self, nodes, name=None):
+        super().__init__(nodes, name)
 
-    def stamp(self, _G, _B, _C, _D, _E, _unknown_currents):
+    def stamp(self, _G, _B, _C, _D, _E, _idx):
         pass
 
 
 class ShortCircuit(Component):
-    def __init__(self, n1, n0, value=0, name=None):
-        super().__init__(n1, n0, value, name)
-        self.norator = Norator(n1, n0, value, name)
-        self.nullator = Norator(n1, n0, value, name)
+    def __init__(self, nodes, name=None):
+        super().__init__(nodes, name)
+        # TODO: check if this is correct
+        self.norator = Norator(nodes, name)
+        self.nullator = Nullator(nodes, name)
 
-    def stamp(self, _G, _B, _C, _D, _E, _unknown_currents):
-        idx = num_unknown_currents(_unknown_currents)
-        unknown_currents.append(self)
-
-        # Combined nullator and norator
-        self.norator.stamp(_G, _B, _C, _D, _E, _unknown_currents)
-        self.nullator.stamp(_G, _B, _C, _D, _E, _unknown_currents)
+    def stamp(self, G, B, C, D, E, idx):
+        self.norator.stamp(G, B, C, D, E, idx)
+        self.nullator.stamp(G, B, C, D, E, idx)
 
 
 class Nullator(Component):
-    def __init__(self, n1, n0, value=0, name=None):
-        super().__init__(n1, n0, value, name)
+    def __init__(self, nodes, name=None):
+        super().__init__(nodes, name)
+        self.num_unknown_currents = 1
 
-    def num_unknown_currents(self):
-        return 1
-
-    def stamp(self, _G, _B, _C, _D, _E, _unknown_currents):
-        idx = num_unknown_currents(_unknown_currents)
-        unknown_currents.append(self)
-
-        C[idx, self.n1] += 1
-        C[idx, self.n0] -= 1
+    def stamp(self, _G, _B, C, _D, _E, idx):
+        n1, n0 = self.nodes
+        C[idx, n1] += 1
+        C[idx, n0] -= 1
 
 
 class Norator(Component):
-    def __init__(self, n1, n0, value=0, name=None):
-        super().__init__(n1, n0, value, name)
+    def __init__(self, nodes, name=None):
+        super().__init__(nodes, name)
 
-    def stamp(self, _G, _B, _C, _D, _E, _unknown_currents):
-        B[self.n1, idx] += 1
-        B[self.n0, idx] -= 1
-
-
-class TwoPort(Component):
-    def __init__(self, n1, n0, n3, n2, value=0, name=None):
-        super().__init__(n1, n0, value, name)
-        self.n3, self.n2 = n3, n2
-
-    def nodes(self):
-        return self.n1, self.n0, self.n3, self.n2
+    def stamp(self, _G, B, _C, _D, _E, idx):
+        n1, n0 = self.nodes
+        B[n1, idx] += 1
+        B[n0, idx] -= 1
 
 
-class VoltageControlledCurrentSource(TwoPort):
-    def __init__(self, n1, n0, n3, n2, value=0, name=None):
-        super().__init__(n1, n0, n3, n2, value, name)
+class VoltageControlledCurrentSource(Component):
+    def __init__(self, nodes, mu=0, name=None):
+        super().__init__(nodes, name)
+        self.mu = mu
 
-    def stamp(self, G, _B, _C, _D, _E, _unknown_currents):
-        G[self.n3, self.n1] -= self.value
-        G[self.n3, self.n0] += self.value
-        G[self.n2, self.n1] += self.value
-        G[self.n2, self.n0] -= self.value
+    def stamp(self, G, _B, _C, _D, _E, _idx):
+        n1, n0, n3, n2 = self.nodes
+        G[n3, n1] -= self.mu
+        G[n3, n0] += self.mu
+        G[n2, n1] += self.mu
+        G[n2, n0] -= self.mu
 
 
-class VoltageControlledVoltageSource(TwoPort):
-    def __init__(self, n1, n0, n3, n2, value=0, name=None):
-        super().__init__(n1, n0, n3, n2, value, name)
+class VoltageControlledVoltageSource(Component):
+    def __init__(self, nodes, mu=0, name=None):
+        super().__init__(nodes, name)
+        self.num_unknown_currents = 1
+        self.mu = mu
 
-    def num_unknown_currents(self):
-        return 1
-
-    def stamp(self, _G, B, C, _D, _E, unknown_currents):
-        idx = num_unknown_currents(unknown_currents)
-        unknown_currents.append(self)
-
+    def stamp(self, _G, B, C, _D, _E, idx):
         # TODO: Test that this code is indeed correct wrt polarity
-        B[self.n3, idx] += 1
-        B[self.n2, idx] -= 1
-        C[idx, self.n3] += 1
-        C[idx, self.n2] -= 1
-        C[idx, self.n1] -= self.value
-        C[idx, self.n0] += self.value
+        n1, n0, n3, n2 = self.nodes
+        B[n3, idx] += 1
+        B[n2, idx] -= 1
+        C[idx, n3] += 1
+        C[idx, n2] -= 1
+        C[idx, n1] -= self.mu
+        C[idx, n0] += self.mu
 
 
-class CurrentControlledCurrentSource(TwoPort):
-    def __init__(self, n1, n0, n3, n2, value=0, name=None):
-        super().__init__(n1, n0, n3, n2, value, name)
+class CurrentControlledCurrentSource(Component):
+    def __init__(self, nodes, a=0, name=None):
+        super().__init__(nodes, name)
+        self.num_unknown_currents = 1
+        self.a = a
 
-    def num_unknown_currents(self):
-        return 1
-
-    def stamp(self, _G, B, C, _D, _E, unknown_currents):
-        idx = num_unknown_currents(unknown_currents)
-        unknown_currents.append(self)
-
-        # TODO: Test that this code is indeed correct wrt polarity
-        B[self.n1, idx] += 1
-        B[self.n0, idx] -= 1
-        B[self.n3, idx] += self.value
-        B[self.n2, idx] -= self.value
-        C[idx, self.n1] += 1
-        C[idx, self.n0] -= 1
+    def stamp(self, _G, _B, _C, _D, _E, _idx):
+        assert False, "Not implemented"
 
 
-class CurrentControlledVoltageSource(TwoPort):
-    def __init__(self, n1, n0, n3, n2, value=0, name=None):
-        super().__init__(n1, n0, n3, n2, value, name)
+class CurrentControlledVoltageSource(Component):
+    def __init__(self, nodes, r=0, name=None):
+        super().__init__(nodes, name)
+        self.num_unknown_currents = 2
+        self.r = r
 
-    def num_unknown_currents(self):
-        return 2
-
-    def stamp(self, _G, _B, _C, _D, _E, _unknown_currents):
-        idx = num_unknown_currents(_unknown_currents)
-        unknown_currents.append(self)
-
-        # TODO: Test that this code is indeed correct wrt polarity
-        B[self.n1, idx] += 1
-        B[self.n0, idx] -= 1
-        B[self.n3, idx + 1] += 1
-        B[self.n2, idx + 1] -= 1
-        C[idx, self.n1] += 1
-        C[idx, self.n0] -= 1
-        C[idx + 1, self.n3] += 1
-        C[idx + 1, self.n2] -= 1
-        D[idx + 1, idx] -= self.value  # TODO
+    def stamp(self, _G, _B, _C, _D, _E, _idx):
+        assert False, "Not implemented"
 
 
-class OperationalAmplifier(TwoPort):
-    def __init__(self, n1, n0, n3, n2, value=0, name=None):
-        super().__init__(n1, n0, n3, n2, value, name)
+class IdealOperationalAmplifier(Component):
+    def __init__(self, nodes, name=None):
+        super().__init__(nodes, name)
+        self.num_unknown_currents = 1
 
-    def num_unknown_currents(self):
-        return 1
-
-    def stamp(self, _G, B, C, _D, _E, unknown_currents):
-        idx = num_unknown_currents(unknown_currents)
-        unknown_currents.append(self)
-
-        B[self.n3, idx] += 1
-        B[self.n2, idx] -= 1
-        C[idx, self.n1] += 1
-        C[idx, self.n0] -= 1
+    def stamp(self, _G, B, C, _D, _E, idx):
+        n1, n0, n3, n2 = self.nodes
+        B[n3, idx] += 1
+        B[n2, idx] -= 1
+        C[idx, n1] += 1
+        C[idx, n0] -= 1
 
 
-class IdealTransformer(TwoPort):
-    def __init__(self, n1, n0, n3, n2, l1=0, l2=0, name=None):
-        super().__init__(n1, n0, n3, n2, value=0, name=name)
+class IdealTransformer(Component):
+    def __init__(self, nodes, l1=0, l2=0, name=None):
+        super().__init__(nodes, name=name)
         self.l1, self.l2 = l1, l2
-
-    def num_unknown_currents(self):
-        return 2
+        self.num_unknown_currents = 2
 
     def stamp(self, _G, _B, _C, _D, _E, _unknown_currents):
+        n1, n0, n3, n2 = self.nodes
         assert False
         pass
 
@@ -269,33 +216,33 @@ def num_nodes(components):
 
 
 def nodes(circuit):
-    return set(node for component in circuit for node in component.nodes())
+    return set(node for component in circuit for node in component.nodes)
 
 
-def num_unknown_currents(components):
-    return sum(component.num_unknown_currents() for component in components)
+def total_unknown_currents(components):
+    return sum(component.num_unknown_currents for component in components)
 
 
-def solve_mna(components, zeros=np.zeros, block=np.block, return_populated_system=False):
-    g_size = num_nodes(components)
-    b_size = num_unknown_currents(components)
+def solve_mna(circuit, zeros=np.zeros, block=np.block, return_populated_system=False):
+    g_size = num_nodes(circuit)
+    b_size = total_unknown_currents(circuit)
+    num_unknown_currents = 0  # This variable grows as more circuit with unknown currents are added
 
-    assert list(nodes(components)) == list(range(g_size)), "Nodes must be in a range from 0 (ground) to num_nodes - 1"
+    assert nodes(circuit) == set(range(g_size)), "Nodes must be in a range from 0 (ground) to num_nodes - 1"
 
     G = zeros((g_size, g_size))
     B = zeros((g_size, b_size))
     C = zeros((b_size, g_size))
     D = zeros((b_size, b_size))
-    E = zeros(g_size + b_size)
-    unknown_currents = []
+    E = zeros((g_size + b_size))
 
-    for component in components:
-        component.stamp(G, B, C, D, E, unknown_currents)
+    for component in circuit:
+        component.stamp(G, B, C, D, E, num_unknown_currents)
+        num_unknown_currents += component.num_unknown_currents
 
-    A = block([
-        [G, B],
-        [C, D]
-    ])
+    assert b_size == num_unknown_currents, "Number of unknown currents must be equal to unknown currents in the circuit"
+
+    A = block([[G, B], [C, D]])
 
     if return_populated_system:
         return A[1:, 1:], E[1:]
